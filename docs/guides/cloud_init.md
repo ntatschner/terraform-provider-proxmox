@@ -94,19 +94,8 @@ EOF
   }
 }
 
-/* Null resource that generates a cloud-config file per vm */
-data "template_file" "user_data" {
-  count    = var.vm_count
-  template = file("${path.module}/files/user_data.cfg")
-  vars     = {
-    pubkey   = file(pathexpand("~/.ssh/id_rsa.pub"))
-    hostname = "vm-${count.index}"
-    fqdn     = "vm-${count.index}.${var.domain_name}"
-  }
-}
 resource "local_file" "cloud_init_user_data_file" {
-  count    = var.vm_count
-  content  = data.template_file.user_data[count.index].rendered
+  content  = templatefile("${var.working_directory}/cloud-inits/kube-cloud-init.cloud_config.tftpl", { ssh_key = var.ssh_public_key, hostname = "${var.hostname}" })
   filename = "${path.module}/files/user_data_${count.index}.cfg"
 }
 
