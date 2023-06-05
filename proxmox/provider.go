@@ -156,10 +156,11 @@ func Provider() *schema.Provider {
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
-			"proxmox_vm_qemu":  resourceVmQemu(),
-			"proxmox_lxc":      resourceLxc(),
-			"proxmox_lxc_disk": resourceLxcDisk(),
-			"proxmox_pool":     resourcePool(),
+			"proxmox_vm_qemu":         resourceVmQemu(),
+			"proxmox_lxc":             resourceLxc(),
+			"proxmox_lxc_disk":        resourceLxcDisk(),
+			"proxmox_pool":            resourcePool(),
+			"proxmox_cloud_init_disk": resourceCloudInitDisk(),
 			// TODO - proxmox_storage_iso
 			// TODO - proxmox_bridge
 			// TODO - proxmox_vm_qemu_template
@@ -213,6 +214,7 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	var id string
 	if result, getok := d.GetOk("pm_api_token_id"); getok {
 		id = result.(string)
+		id = strings.Split(id, "!")[0]
 	} else if result, getok := d.GetOk("pm_user"); getok {
 		id = result.(string)
 	}
@@ -222,12 +224,12 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	}
 	permlist, err := client.GetUserPermissions(userID, "/")
 	if err != nil {
-		err = fmt.Errorf("user does not exist or has insufficient permissions on proxmox: %s", userID.ToString())
 		return nil, err
 	}
 	sort.Strings(permlist)
-	if subslice(minimum_permissions, permlist) {
-
+	sort.Strings(minimum_permissions)
+	permDiff := permissions_check(permlist, minimum_permissions)
+	if len(permDiff) == 0 {
 		// look to see what logging we should be outputting according to the provider configuration
 		logLevels := make(map[string]string)
 		for logger, level := range d.Get("pm_log_levels").(map[string]interface{}) {
@@ -260,7 +262,7 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 			DangerouslyIgnoreUnknownAttributes: d.Get("pm_dangerously_ignore_unknown_attributes").(bool),
 		}, nil
 	} else {
-		err = fmt.Errorf("permissions for user/token %s are not sufficient, please provide the following permissions at minimum: %v", userID.ToString(), minimum_permissions)
+		err = fmt.Errorf("permissions for user/token %s are not sufficient, please provide also the following permissions that are missing: %v", userID.ToString(), permDiff)
 		return nil, err
 	}
 }
